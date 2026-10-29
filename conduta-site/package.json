@@ -1,0 +1,1 @@
+{"name":"bloxter-conduta","version":"1.0.0","private":true,"engines":{"node":">=18"},"dependencies":{"@neondatabase/serverless":"^1.2.0"}}
