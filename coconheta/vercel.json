@@ -1,0 +1,1 @@
+{"outputDirectory":"public","cleanUrls":true,"functions":{"api/index.js":{"maxDuration":30}},"rewrites":[{"source":"/api/:path*","destination":"/api/index?__p=:path*"}]}
