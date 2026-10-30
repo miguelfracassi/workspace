@@ -70,6 +70,25 @@ const fixPost = (p) => {
   MEDIA_FIELDS.forEach((k) => { if (k !== 'media') delete clean[k]; });
   return { ...clean, body: p.body ?? p.content ?? p.text ?? '', user: p.user || p.author || { id: p.user_id ?? p.uid, username: p.username || '', name: p.name || p.username || '', avatar: p.avatar || null }, media: normalized };
 };
+const _postDetail = new Map();
+async function hydratePost(p) {
+  const post = fixPost(p);
+  if (post.media.length || !post.id || (post.body && !/(foto|imagem|image|video|m[ií]dia|anexo)/i.test(post.body))) return post;
+  const key = String(post.id), cached = _postDetail.get(key);
+  if (cached && Date.now() - cached.at < 60000) return cached.value;
+  let value = post;
+  try {
+    const d = await bx(`/admin/posts/${encodeURIComponent(key)}`);
+    const full = d.post || d.item || d;
+    const merged = { ...post, ...full, user: full.user || post.user };
+    const enriched = fixPost(merged);
+    if (enriched.media.length) value = enriched;
+  } catch { /* detalhes podem não estar disponíveis para este post */ }
+  _postDetail.set(key, { at: Date.now(), value });
+  if (_postDetail.size > 120) _postDetail.delete(_postDetail.keys().next().value);
+  return value;
+}
+const hydratePosts = (posts) => Promise.all((posts || []).map(hydratePost));
 
 // ---- denúncias (API de administração do Bloxter) ----
 // Rotas esperadas no Bloxter: GET /admin/reports, POST /admin/reports/:id/resolve e /dismiss.
@@ -192,7 +211,7 @@ module.exports = async (req, res) => {
 
     // tweets (via API de administração do Bloxter)
     if (a === 'feed' && m === 'GET') {
-      if (await getKey()) return send(200, { posts: ((await bx('/admin/posts?limit=30')).posts || []).map(fixPost) });
+      if (await getKey()) return send(200, { posts: await hydratePosts((await bx('/admin/posts?limit=30')).posts || []) });
       const r = await (await fetch(BASE + '/posts/recent?limit=30')).json().catch(() => ({}));
       return send(200, { posts: (r.posts || []).map(fixPost) });
     }
@@ -263,6 +282,7 @@ module.exports = async (req, res) => {
           if (full) r.post = full;
         }
       } catch { /* manter os detalhes já retornados pela denúncia */ }
+      await Promise.all(list.map(async (r) => { if (r.post) r.post = await hydratePost(r.post); }));
       return send(200, { reports: st ? list.filter((r) => r.status === st) : list });
     }
     if (a === 'reports' && b && (c === 'resolve' || c === 'dismiss') && m === 'POST') {
