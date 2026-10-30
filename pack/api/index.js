@@ -37,30 +37,39 @@ async function bx(path, o = {}, key) {
 }
 // ---- mídia (fotos e vídeos) ----
 const ORIGIN = (() => { try { return new URL(BASE).origin; } catch { return ''; } })();
-const absU = (u) => { try { const x = new URL(String(u), ORIGIN + '/'); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch { return ''; } };
+const absU = (u) => {
+  const raw = String(u || '').trim();
+  if (raw.length <= 2200000 && /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(raw)) return raw;
+  try { const x = new URL(raw, ORIGIN + '/'); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch { return ''; }
+};
 const kindOf = (u, t = '') => (/video/i.test(t) || /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(u) ? 'video' : 'image');
+const MEDIA_FIELDS = ['media','attachments','files','images','photos','image','image_url','imageUrl','photo','videos','video','video_url','videoUrl','media_url','mediaUrl','media_urls','mediaUrls','media_items','mediaItems','srcset'];
 const mediaOf = (p) => {
-  const out = [], seen = new Set(), fields = ['media', 'attachments', 'files', 'images', 'photos', 'image', 'image_url', 'photo', 'videos', 'video', 'video_url', 'srcset'];
+  const out = [], seen = new Set();
   const add = (x, t = '') => {
     if (!x) return;
     if (Array.isArray(x)) { x.forEach((y) => add(y, t)); return; }
     if (typeof x === 'object') {
-      const raw = x.url || x.src || x.href || x.video_url || x.image_url || x.download_url || x.original_url || '';
+      const raw = x.url || x.src || x.href || x.video_url || x.videoUrl || x.image_url || x.imageUrl || x.media_url || x.mediaUrl || x.download_url || x.original_url || x.data || '';
       if (raw) {
-        const u = absU(raw);
-        if (u && !seen.has(u)) { seen.add(u); out.push({ type: kindOf(u, x.type || x.mime || x.mime_type || x.kind || t), url: u }); }
+        const u = absU(raw), kind = x.type || x.mime || x.mime_type || x.kind || t;
+        if (u && !seen.has(u)) { seen.add(u); out.push({ type: kindOf(u, kind), url: u }); }
       } else {
-        fields.forEach((k) => { if (x[k] != null) add(x[k], /video/i.test(k) ? 'video' : /image|photo/i.test(k) ? 'image' : t); });
+        MEDIA_FIELDS.forEach((k) => { if (x[k] != null) add(x[k], /video/i.test(k) ? 'video' : /image|photo/i.test(k) ? 'image' : t); });
       }
       return;
     }
     const u = absU(x);
     if (u && !seen.has(u)) { seen.add(u); out.push({ type: kindOf(u, t), url: u }); }
   };
-  fields.forEach((k) => { if (p[k] != null) add(p[k], /video/i.test(k) ? 'video' : /image|photo/i.test(k) ? 'image' : ''); });
+  MEDIA_FIELDS.forEach((k) => { if (p[k] != null) add(p[k], /video/i.test(k) ? 'video' : /image|photo/i.test(k) ? 'image' : ''); });
   return out;
 };
-const fixPost = (p) => ({ ...p, body: p.body ?? p.content ?? p.text ?? '', user: p.user || p.author || { id: p.user_id ?? p.uid, username: p.username || '', name: p.name || p.username || '', avatar: p.avatar || null }, media: mediaOf(p) });
+const fixPost = (p) => {
+  const normalized = mediaOf(p), clean = { ...p };
+  MEDIA_FIELDS.forEach((k) => { if (k !== 'media') delete clean[k]; });
+  return { ...clean, body: p.body ?? p.content ?? p.text ?? '', user: p.user || p.author || { id: p.user_id ?? p.uid, username: p.username || '', name: p.name || p.username || '', avatar: p.avatar || null }, media: normalized };
+};
 
 // ---- denúncias (API de administração do Bloxter) ----
 // Rotas esperadas no Bloxter: GET /admin/reports, POST /admin/reports/:id/resolve e /dismiss.
@@ -69,7 +78,9 @@ const REPORTS = { list: '/admin/reports', act: (id, what) => `/admin/reports/${i
 const U = (x, fb) => (x && typeof x === 'object' && (x.username || x.name || x.id) ? { id: x.id, username: x.username || '', name: x.name || x.username || '', avatar: x.avatar || null } : { username: String((typeof x === 'string' ? x : '') || fb || ''), name: String((typeof x === 'string' ? x : '') || fb || ''), avatar: null });
 const fixRep = (r) => {
   const s = String(r.status || (r.resolved ? 'resolved' : '')).toLowerCase();
-  const post = r.post || (r.post_id ? { id: r.post_id } : null);
+  const rawPost = r.post || (r.post_id ? { id: r.post_id } : null);
+  const reportMedia = MEDIA_FIELDS.reduce((o, k) => { if (r[k] != null) o[k] = r[k]; return o; }, {});
+  const post = rawPost ? { ...rawPost, ...reportMedia } : null;
   return {
     id: r.id,
     status: ['resolved', 'closed', 'done', 'actioned'].includes(s) ? 'resolved' : ['dismissed', 'rejected', 'ignored'].includes(s) ? 'dismissed' : 'open',
