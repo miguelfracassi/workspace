@@ -40,17 +40,24 @@ const ORIGIN = (() => { try { return new URL(BASE).origin; } catch { return ''; 
 const absU = (u) => { try { const x = new URL(String(u), ORIGIN + '/'); return /^https?:$/.test(x.protocol) ? x.href : ''; } catch { return ''; } };
 const kindOf = (u, t = '') => (/video/i.test(t) || /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(u) ? 'video' : 'image');
 const mediaOf = (p) => {
-  const out = [], seen = new Set();
-  const add = (x, t) => {
+  const out = [], seen = new Set(), fields = ['media', 'attachments', 'files', 'images', 'photos', 'image', 'image_url', 'photo', 'videos', 'video', 'video_url', 'srcset'];
+  const add = (x, t = '') => {
     if (!x) return;
-    if (Array.isArray(x)) return x.forEach((y) => add(y, t));
-    const o = typeof x === 'object';
-    const u = absU(o ? x.url || x.src || x.href || x.video_url || x.image_url || '' : x);
-    if (!u || seen.has(u)) return; seen.add(u);
-    out.push({ type: kindOf(u, o ? x.type || x.mime || x.kind || t || '' : t || ''), url: u });
+    if (Array.isArray(x)) { x.forEach((y) => add(y, t)); return; }
+    if (typeof x === 'object') {
+      const raw = x.url || x.src || x.href || x.video_url || x.image_url || x.download_url || x.original_url || '';
+      if (raw) {
+        const u = absU(raw);
+        if (u && !seen.has(u)) { seen.add(u); out.push({ type: kindOf(u, x.type || x.mime || x.mime_type || x.kind || t), url: u }); }
+      } else {
+        fields.forEach((k) => { if (x[k] != null) add(x[k], /video/i.test(k) ? 'video' : /image|photo/i.test(k) ? 'image' : t); });
+      }
+      return;
+    }
+    const u = absU(x);
+    if (u && !seen.has(u)) { seen.add(u); out.push({ type: kindOf(u, t), url: u }); }
   };
-  add(p.media); add(p.attachments); add(p.images, 'image'); add(p.photos, 'image'); add(p.image, 'image'); add(p.image_url, 'image'); add(p.photo, 'image');
-  add(p.videos, 'video'); add(p.video, 'video'); add(p.video_url, 'video');
+  fields.forEach((k) => { if (p[k] != null) add(p[k], /video/i.test(k) ? 'video' : /image|photo/i.test(k) ? 'image' : ''); });
   return out;
 };
 const fixPost = (p) => ({ ...p, body: p.body ?? p.content ?? p.text ?? '', user: p.user || p.author || { id: p.user_id ?? p.uid, username: p.username || '', name: p.name || p.username || '', avatar: p.avatar || null }, media: mediaOf(p) });
@@ -236,11 +243,27 @@ module.exports = async (req, res) => {
       const st = ['open', 'resolved', 'dismissed'].includes(q.status) ? q.status : '';
       const d = await bx(`${REPORTS.list}?limit=60${st ? '&status=' + st : ''}`);
       const list = (d.reports || d.items || []).map(fixRep);
+      // Algumas respostas de denúncia trazem somente post_id; completar o cartão com os posts do feed.
+      try {
+        const pd = await bx('/admin/posts?limit=100');
+        const byId = new Map((pd.posts || []).map((p) => [String(p.id), fixPost(p)]));
+        for (const r of list) if (r.post?.id) {
+          const full = byId.get(String(r.post.id));
+          if (full) r.post = full;
+        }
+      } catch { /* manter os detalhes já retornados pela denúncia */ }
       return send(200, { reports: st ? list.filter((r) => r.status === st) : list });
     }
     if (a === 'reports' && b && (c === 'resolve' || c === 'dismiss') && m === 'POST') {
       const id = parseInt(b, 10);
-      await bx(REPORTS.act(id, c), { method: 'POST', body: { note: String(body.note || '').slice(0, 300) } });
+      const note = String(body.note || '').slice(0, 300);
+      try {
+        await bx(REPORTS.act(id, c), { method: 'POST', body: { note } });
+      } catch (err) {
+        // Compatibilidade com instalações cuja API atualiza o status via PATCH no recurso da denúncia.
+        if (err.s !== 404) throw err;
+        await bx(`/admin/reports/${id}`, { method: 'PATCH', body: { status: c === 'resolve' ? 'resolved' : 'dismissed', note } });
+      }
       _rc.t = 0;
       await log(me.id, c === 'resolve' ? 'resolveu denúncia' : 'dispensou denúncia', `#${id}`);
       return send(200, { ok: true });
