@@ -8,6 +8,7 @@ function toast(t){const e=document.createElement('div');e.className='toast glass
 function ago(d){const s=(Date.now()-new Date(d))/1000;if(s<60)return 'agora';if(s<3600)return Math.floor(s/60)+' min';if(s<86400)return Math.floor(s/3600)+' h';return new Date(d).toLocaleDateString('pt-BR')}
 function avatar(u,c=''){u=u||{};const n=(u.name||u.username||'?')[0].toUpperCase();return u.avatar?`<img class="av ${c}" ${u.username?`data-p="${esc(u.username)}"`:''} src="${esc(u.avatar)}" alt="">`:`<div class="av ${c}" ${u.username?`data-p="${esc(u.username)}"`:''}>${esc(n)}</div>`}
 function modal(h){const o=document.createElement('div');o.className='ov';o.innerHTML=`<div class="modal glass">${h}</div>`;o.addEventListener('mousedown',e=>{if(e.target===o)o.remove()});document.body.append(o);return o}
+function confirmInSite(message){return new Promise(resolve=>{const o=modal(`<h2>Confirmar ação</h2><p>${esc(message)}</p><div class="acts"><button class="btn danger" data-yes>Confirmar</button><button class="btn ghost" data-no>Cancelar</button></div>`);let done=false;const finish=v=>{if(done)return;done=true;o.remove();resolve(v)};o.onmousedown=e=>{if(e.target===o)finish(false)};o.querySelector('[data-yes]').onclick=()=>finish(true);o.querySelector('[data-no]').onclick=()=>finish(false);const key=e=>{if(e.key==='Escape'){document.removeEventListener('keydown',key);finish(false)}};document.addEventListener('keydown',key);});}
 function resize(f){return new Promise((ok,no)=>{const im=new Image();im.onload=()=>{const s=160,c=document.createElement('canvas');c.width=c.height=s;const m=Math.min(im.width,im.height);c.getContext('2d').drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,s,s);ok(c.toDataURL('image/jpeg',.82))};im.onerror=no;im.src=URL.createObjectURL(f)})}
 const MEDIA={},POSTS={};
 function reg(p){POSTS[p.id]=p;MEDIA[p.id]=p.media||[]}
@@ -18,7 +19,7 @@ function viewer(id,i){const L=MEDIA[id]||[],p=POSTS[id];if(!L.length)return;i=((
  q('#vx').onclick=()=>o.remove();if(q('#vp')){q('#vp').onclick=()=>{o.remove();viewer(id,i-1)};q('#vn').onclick=()=>{o.remove();viewer(id,i+1)}}
  const pn=o.querySelector('[data-p]');if(pn)pn.onclick=()=>{o.remove();profile(pn.dataset.p)};
  if(q('#vb'))q('#vb').onclick=()=>{o.remove();banForm(u.username,`Mídia do post #${p.id}: `)};
- if(q('#vd'))q('#vd').onclick=async()=>{if(!confirm('Apagar este post para todos?'))return;try{await api('/posts/'+p.id,{method:'DELETE'});o.remove();document.querySelectorAll(`[data-mv^="${p.id}|"]`).forEach(e=>(e.closest('.tile,.post')||e).remove());toast('Post apagado')}catch(e){toast(e.message)}}}
+ if(q('#vd'))q('#vd').onclick=async()=>{if(!await confirmInSite('Apagar este post para todos?'))return;try{await api('/posts/'+p.id,{method:'DELETE'});o.remove();document.querySelectorAll(`[data-mv^="${p.id}|"]`).forEach(e=>(e.closest('.tile,.post')||e).remove());toast('Post apagado')}catch(e){toast(e.message)}}}
 const LOGO='<path pathLength="1" d="M357 882C300 800 300 650 340 560C400 400 520 270 720 262C830 262 860 340 835 430C805 520 740 600 660 665C580 725 490 760 460 690C440 630 520 560 620 515C720 475 810 500 860 560C930 640 950 750 900 850C850 940 760 990 680 985C600 980 530 930 470 880"/>';
 async function start(cur,needAdmin){
  try{ME=(await api('/me')).user}catch(e){location.replace('/');return null}
@@ -39,7 +40,7 @@ const postHTML=p=>{const u=p.user||p.author||{username:p.username||'',name:p.nam
 function postClicks(box){box.addEventListener('click',async e=>{const t=e.target.closest('[data-p],[data-ban],[data-del],[data-mv]');if(!t)return;
  if(t.dataset.mv){const[a,b]=t.dataset.mv.split('|');return viewer(a,+b)}
  if(t.dataset.p)return profile(t.dataset.p);if(t.dataset.ban)return banForm(t.dataset.ban);
- if(confirm('Apagar este post para todos?')){try{await api('/posts/'+t.dataset.del,{method:'DELETE'});t.closest('.post').remove();toast('Post apagado')}catch(e){toast(e.message)}}})}
+ if(await confirmInSite('Apagar este post para todos?')){try{await api('/posts/'+t.dataset.del,{method:'DELETE'});t.closest('.post').remove();toast('Post apagado')}catch(e){toast(e.message)}}})}
 function banForm(u,pre=''){const o=modal(`<h2>Solicitar banimento de @${esc(u)}</h2><p style="color:var(--mut)">O pedido vai para a administração, que aprova ou recusa.</p><div><label>Motivo</label><textarea id="rs" rows="4" placeholder="Descreva o que aconteceu, com ids dos posts, se houver.">${esc(pre)}</textarea></div><div class="err" id="re"></div><div class="acts"><button class="btn danger" id="send">Enviar para a administração</button><button class="btn ghost" id="x">Cancelar</button></div>`);
  $('#x',o).onclick=()=>o.remove();$('#send',o).onclick=async()=>{try{await api('/bans',{method:'POST',body:{username:u,reason:$('#rs',o).value}});o.remove();toast('Pedido enviado para a administração')}catch(e){$('#re',o).textContent=e.message}}}
 async function profile(u){try{const [{user},h,nt]=await Promise.all([api('/profile/'+encodeURIComponent(u)),api('/history?username='+encodeURIComponent(u)).catch(()=>({posts:[]})),api('/notes?username='+encodeURIComponent(u)).catch(()=>({notes:[]}))]);
