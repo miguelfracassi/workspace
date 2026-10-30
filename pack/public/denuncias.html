@@ -13,7 +13,7 @@ $('#rl').addEventListener('click',async e=>{const t=e.target.closest('[data-p],[
  if(t.dataset.mv){const[a,b]=t.dataset.mv.split('|');return viewer(a,+b)}
  if(t.dataset.ban!==undefined)return banForm(t.dataset.ban,`Denúncia${t.dataset.post?' no post #'+t.dataset.post:''}${t.dataset.why?' ('+t.dataset.why+')':''}: `);
  if(t.dataset.p)return profile(t.dataset.p);
- try{if(t.dataset.del!==undefined){if(!confirm('Apagar este post para todos?'))return;await api('/posts/'+t.dataset.del,{method:'DELETE'});toast('Post apagado');return R()}
+ try{if(t.dataset.del!==undefined){if(!await confirmInSite('Apagar este post para todos?'))return;await api('/posts/'+t.dataset.del,{method:'DELETE'});toast('Post apagado');return R()}
   if(t.dataset.act){t.disabled=true;await api(`/reports/${t.dataset.rid}/${t.dataset.act}`,{method:'POST',body:{}});toast(t.dataset.act==='resolve'?'Denúncia resolvida':'Denúncia dispensada');R()}}
  catch(er){toast(er.message);t.disabled=false}});
 R();setInterval(()=>{if(f==='open'&&!document.querySelector('.ov'))R()},30000);})()</script></body></html>
