@@ -1,0 +1,14 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Mídia</title><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="conduta.css"></head><body data-cur="md"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="wrap"><header class="top glass" id="hdr"></header><div class="row sec"><input id="q" placeholder="Usuário do Bloxter (vazio = todos)"><button class="btn" id="bs">Buscar</button></div><div class="sub" id="flt"><button data-k="all" class="on">Tudo</button><button data-k="image">Fotos</button><button data-k="video">Vídeos</button></div><div class="gal" id="g"></div><div class="empty" id="em" hidden></div><div style="text-align:center;margin-top:14px"><button class="btn ghost" id="more" hidden>Carregar mais</button></div></div><script src="conduta.js"></script><script>(async()=>{if(!await start("md",false))return;
+let nb=null,qq='',kind='all';
+const tile=(p,x,i)=>`<button class="tile" data-mv="${p.id}|${i}" data-k="${x.type}" type="button">${x.type==='video'?`<video src="${esc(x.url)}#t=0.1" preload="metadata" muted playsinline></video><span class="play">▶</span>`:`<img src="${esc(x.url)}" loading="lazy" referrerpolicy="no-referrer" alt="">`}<span class="cap">@${esc((p.user||{}).username||'')} · ${ago(p.created_at)}</span></button>`;
+const F=()=>{let n=0;document.querySelectorAll('#g .tile').forEach(t=>{const h=kind!=='all'&&t.dataset.k!==kind;t.hidden=h;if(!h)n++});$('#em').hidden=!!n||!$('#g').children.length}
+async function load(reset){if(reset){$('#g').innerHTML='';nb=null;qq=$('#q').value;$('#em').hidden=false;$('#em').textContent='Carregando…'}
+ try{const d=await api('/media?username='+encodeURIComponent(qq)+(nb?'&before='+nb:''));
+  d.posts.forEach(p=>{reg(p);$('#g').insertAdjacentHTML('beforeend',p.media.map((x,i)=>tile(p,x,i)).join(''))});
+  nb=d.next_before;$('#more').hidden=!d.scanned;$('#em').textContent=$('#g').children.length?'':(d.scanned?'Nenhuma foto ou vídeo nesses posts. Use “Carregar mais” para ver posts mais antigos.':'Nada encontrado.');
+  $('#em').hidden=!!$('#g').children.length;F()}
+ catch(e){$('#em').hidden=false;$('#em').textContent=e.message;$('#more').hidden=true}}
+$('#bs').onclick=()=>load(true);$('#q').addEventListener('keydown',e=>e.key==='Enter'&&load(true));$('#more').onclick=()=>load(false);
+$('#flt').onclick=e=>{const k=e.target.closest('button')?.dataset.k;if(!k)return;kind=k;$('#flt').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.k===k));F()};
+$('#g').addEventListener('click',e=>{const t=e.target.closest('[data-mv]');if(!t)return;const[a,b]=t.dataset.mv.split('|');viewer(a,+b)});
+load(true);})()</script></body></html>

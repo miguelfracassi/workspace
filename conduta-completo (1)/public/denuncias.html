@@ -1,0 +1,19 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Denúncias</title><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="conduta.css"></head><body data-cur="dn"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="wrap"><header class="top glass" id="hdr"></header><div class="sub" id="flt"><button data-s="open" class="on">Abertas</button><button data-s="resolved">Resolvidas</button><button data-s="dismissed">Dispensadas</button><button data-s="all">Todas</button></div><div class="list" id="rl"></div></div><script src="conduta.js"></script><script>(async()=>{if(!await start("dn",false))return;
+const lab={open:'Aberta',resolved:'Resolvida',dismissed:'Dispensada'};let f='open',list=[];
+const card=r=>{const p=r.post,t=r.target,rp=r.reporter;return `<div class="card glass rep" data-id="${esc(r.id)}"><div class="hd"><span class="pill">${lab[r.status]}</span><b>Denúncia #${esc(r.id)}</b><span>${ago(r.created_at)}</span></div>
+<div class="tg" style="margin-top:8px"><span>Denunciado:</span>${t.username?`<b data-p="${esc(t.username)}">@${esc(t.username)}</b>`:'<b>—</b>'}<span>· por ${rp.username?`<u data-p="${esc(rp.username)}" style="cursor:pointer">@${esc(rp.username)}</u>`:'anônimo'}</span>${r.reason?`<span class="pill">${esc(r.reason)}</span>`:''}</div>
+${r.details?`<div class="reason">${esc(r.details)}</div>`:''}
+${p?`<div class="tgt"><small style="color:var(--mut)">Post #${esc(p.id)}</small>${p.body?`<div class="body" style="margin:4px 0 8px">${esc(p.body)}</div>`:''}${mediaHTML(p)}</div>`:''}
+<div class="acts">${t.username?`<button class="btn ghost sm" data-p="${esc(t.username)}">Ver perfil</button><button class="btn ghost sm" data-ban="${esc(t.username)}" data-post="${p?esc(p.id):''}" data-why="${esc(r.reason)}">Solicitar ban</button>`:''}${p?`<button class="btn danger sm" data-del="${esc(p.id)}">Apagar post</button>`:''}${r.status==='open'?`<button class="btn sm" data-act="resolve" data-rid="${esc(r.id)}">Marcar resolvida</button><button class="btn ghost sm" data-act="dismiss" data-rid="${esc(r.id)}">Dispensar</button>`:''}</div></div>`};
+async function R(){$('#rl').innerHTML='<div class="empty">Carregando…</div>';
+ try{list=(await api('/reports'+(f==='all'?'':'?status='+f))).reports;$('#rl').innerHTML=list.map(card).join('')||'<div class="empty">Nenhuma denúncia aqui.</div>'}
+ catch(e){$('#rl').innerHTML=`<div class="empty">${esc(e.message)}</div>`}refreshStats()}
+$('#flt').onclick=e=>{const s=e.target.closest('button')?.dataset.s;if(!s)return;f=s;$('#flt').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.s===s));R()};
+$('#rl').addEventListener('click',async e=>{const t=e.target.closest('[data-p],[data-ban],[data-del],[data-act],[data-mv]');if(!t)return;
+ if(t.dataset.mv){const[a,b]=t.dataset.mv.split('|');return viewer(a,+b)}
+ if(t.dataset.ban!==undefined)return banForm(t.dataset.ban,`Denúncia${t.dataset.post?' no post #'+t.dataset.post:''}${t.dataset.why?' ('+t.dataset.why+')':''}: `);
+ if(t.dataset.p)return profile(t.dataset.p);
+ try{if(t.dataset.del!==undefined){if(!confirm('Apagar este post para todos?'))return;await api('/posts/'+t.dataset.del,{method:'DELETE'});toast('Post apagado');return R()}
+  if(t.dataset.act){t.disabled=true;await api(`/reports/${t.dataset.rid}/${t.dataset.act}`,{method:'POST',body:{}});toast(t.dataset.act==='resolve'?'Denúncia resolvida':'Denúncia dispensada');R()}}
+ catch(er){toast(er.message);t.disabled=false}});
+R();setInterval(()=>{if(f==='open'&&!document.querySelector('.ov'))R()},30000);})()</script></body></html>
